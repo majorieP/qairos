@@ -1,6 +1,8 @@
-import { useState, useMemo, useEffect, Fragment } from 'react'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
+import { creatorPhoto, fmtFollowers } from '../lib/creatorHelpers'
+import { uploadImage } from '../lib/supabaseHelpers'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -538,18 +540,12 @@ function fmt(n) {
   return n === 0 ? '$0' : '$' + n.toLocaleString()
 }
 
-function fmtNum(n) {
-  if (!n) return '—'
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
-  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K'
-  return String(n)
-}
+// fmtFollowers now lives in lib/creatorHelpers.js — re-export for local compat.
+const fmtNum = fmtFollowers
 
+// creatorPhoto now lives in lib/creatorHelpers.js — thin wrapper.
 function clientPhoto(client) {
-  if (CREATOR_PHOTOS[client.id]) return CREATOR_PHOTOS[client.id]
-  const n = ((client.id * 7) % 49) + 1
-  const gender = client.id % 2 === 0 ? 'men' : 'women'
-  return `https://randomuser.me/api/portraits/${gender}/${n}.jpg`
+  return creatorPhoto(client)
 }
 
 function fmtDate(iso) {
@@ -563,7 +559,8 @@ function primaryPlatformData(client) {
 }
 
 function primaryFollowers(client) {
-  return primaryPlatformData(client)?.followers ?? '—'
+  // Single source of truth: format the numeric followersNum using fmtFollowers.
+  return fmtFollowers(primaryPlatformData(client)?.followersNum)
 }
 
 function primaryFollowersNum(client) {
@@ -844,7 +841,7 @@ function KanbanView({ clients, onSelect }) {
 function GalleryCard({ client, onSelect }) {
   const totalFollowers = client.platforms.reduce((s, p) => s + (p.followersNum || 0), 0)
   const largestPlatform = client.platforms.reduce((max, p) => (!max || p.followersNum > max.followersNum) ? p : max, null)
-  const photoUrl = CREATOR_PHOTOS[client.id] || `https://randomuser.me/api/portraits/women/${(client.id % 50) || 1}.jpg`
+  const photoUrl = creatorPhoto(client)
   const contentUrl = CREATOR_CONTENT[client.id] || `https://picsum.photos/300/400?random=${client.id * 11}`
   const mockStats = CREATOR_MOCK_STATS[client.id] || { likes: '—', comments: '—' }
 
@@ -1118,7 +1115,7 @@ function ClientProfile({ client, onBack, onSave }) {
   const totalFollowers = client.platforms.reduce((s, p) => s + (p.followersNum || 0), 0)
   const primaryPlatformStat = client.platforms.find(p => p.name === client.primaryPlatform) || client.platforms[0]
   const largestPlatform = client.platforms.reduce((max, p) => (!max || p.followersNum > max.followersNum) ? p : max, null)
-  const profilePhoto = CREATOR_PHOTOS[client.id] || `https://randomuser.me/api/portraits/women/1.jpg`
+  const profilePhoto = creatorPhoto(client)
   const mockStats = CREATOR_MOCK_STATS[client.id] || { likes: '—', comments: '—' }
 
   return (
@@ -1144,7 +1141,7 @@ function ClientProfile({ client, onBack, onSave }) {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, marginBottom: 24 }}>
               {/* Left: photo + name + badges */}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
-                <img src={profilePhoto} alt={client.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                <img src={profilePhoto} alt={client.name} style={{ width: 140, height: 140, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
                     <h1 style={{ fontFamily: '"Inter", system-ui, sans-serif', fontWeight: 700, fontSize: 28, color: '#111111', margin: 0, lineHeight: 1.1 }}>{client.name}</h1>
@@ -1489,6 +1486,10 @@ function ClientProfile({ client, onBack, onSave }) {
           <button onClick={handleCancel} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"><CloseIcon /></button>
         </div>
         <div className="p-6 space-y-4">
+          <PhotoUpload
+            value={form.profilePhoto || form.profile_photo || null}
+            onChange={url => setForm(prev => ({ ...prev, profilePhoto: url }))}
+          />
           {[
             { label: 'Name',   key: 'name' },
             { label: 'Handle', key: 'handle' },
@@ -1683,6 +1684,67 @@ const ALL_CHANNELS = [
 const ADD_PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'Twitter/X', 'Pinterest', 'Twitch', 'Other']
 const RATE_TYPES = ['Story', 'Feed Post', 'Reel', 'Live', 'Video', 'Shop', 'Integration', 'Dedicated', 'Shorts', 'Vlog', 'Episode', 'Newsletter Mention', 'Post']
 
+// ── Photo Upload (click or drag-drop) ────────────────────────────────────────
+function PhotoUpload({ value, onChange }) {
+  const inputRef = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+
+  async function handleFile(file) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setError('Please choose an image file'); return }
+    if (file.size > 5 * 1024 * 1024) { setError('Image must be under 5 MB'); return }
+    setError(null); setBusy(true)
+    const { url, error: err } = await uploadImage('creator-photos', file, 'creator')
+    setBusy(false)
+    if (err) { setError(err); return }
+    if (url) onChange(url)
+  }
+
+  return (
+    <div>
+      <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-2">Profile Photo</label>
+      <div
+        onClick={() => inputRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files?.[0]) }}
+        className={`relative flex items-center gap-3 p-3 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${dragOver ? 'border-gray-400 bg-gray-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}
+      >
+        {value ? (
+          <img src={value} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+        ) : (
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#F3F3F3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v14M2 9h14" stroke="#AAAAAA" strokeWidth="1.6" strokeLinecap="round"/></svg>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-gray-700">{busy ? 'Uploading…' : value ? 'Photo uploaded' : 'Click or drop an image'}</p>
+          <p className="text-[10px] text-gray-400">{value ? 'Click to replace' : 'PNG / JPG, up to 5 MB'}</p>
+          {error && <p className="text-[10px] text-red-500 mt-0.5">{error}</p>}
+        </div>
+        {value && (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onChange(null); setError(null) }}
+            className="p-1 text-gray-400 hover:text-gray-600 shrink-0"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          </button>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={e => handleFile(e.target.files?.[0])}
+        />
+      </div>
+    </div>
+  )
+}
+
 function AddClientModal({ onClose, onAdd }) {
   const [form, setForm] = useState({
     name: '', handle: '', email: '', phone: '', location: '', bio: '',
@@ -1690,10 +1752,11 @@ function AddClientModal({ onClose, onAdd }) {
     contractType: 'Non-Exclusive', commissionRate: 20, signedDate: '',
     primaryPlatform: 'Instagram', notes: '',
   })
+  const [profilePhoto, setProfilePhoto] = useState(null)
   const [niches, setNiches] = useState([])
   const [channels, setChannels] = useState([])
   const [platforms, setPlatforms] = useState([
-    { id: 1, name: 'Instagram', handle: '', followers: '', followersNum: '', engagement: '', avgViews: '' }
+    { id: 1, name: 'Instagram', handle: '', followersNum: '', engagement: '', avgViews: '' }
   ])
   const [rates, setRates] = useState([
     { id: 1, platform: 'Instagram', type: 'Story', rate: '' }
@@ -1705,7 +1768,7 @@ function AddClientModal({ onClose, onAdd }) {
   const toggleNiche = (n) => setNiches(prev => prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n])
   const toggleChannel = (c) => setChannels(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])
 
-  const addPlatform = () => setPlatforms(p => [...p, { id: Date.now(), name: 'Instagram', handle: '', followers: '', followersNum: '', engagement: '', avgViews: '' }])
+  const addPlatform = () => setPlatforms(p => [...p, { id: Date.now(), name: 'Instagram', handle: '', followersNum: '', engagement: '', avgViews: '' }])
   const removePlatform = (id) => setPlatforms(p => p.filter(r => r.id !== id))
   const updatePlatform = (id, field, val) => setPlatforms(p => p.map(r => r.id === id ? { ...r, [field]: val } : r))
 
@@ -1724,15 +1787,21 @@ function AddClientModal({ onClose, onAdd }) {
     const newClient = {
       ...form,
       id,
+      profilePhoto,
       niches: niches.length ? niches : ['Other'],
       strongestChannels: channels,
-      platforms: platforms.filter(p => p.name).map(p => ({
-        name: p.name, handle: p.handle,
-        followers: p.followers || '—',
-        followersNum: Number(p.followersNum) || 0,
-        engagement: Number(p.engagement) || 0,
-        avgViews: p.avgViews || '—',
-      })),
+      platforms: platforms.filter(p => p.name).map(p => {
+        const num = Number(p.followersNum) || 0
+        return {
+          name: p.name, handle: p.handle,
+          // Derive the display string from the numeric value so there's
+          // a single source of truth.
+          followers: num ? fmtFollowers(num) : '—',
+          followersNum: num,
+          engagement: Number(p.engagement) || 0,
+          avgViews: p.avgViews || '—',
+        }
+      }),
       rates: rates.filter(r => r.rate).map((r, i) => ({ id: i + 1, platform: r.platform, type: r.type, rate: Number(r.rate) })),
       deals: [], campaigns: [],
       earnings: { ytd: 0, commission: 0, paidOut: 0 },
@@ -1755,6 +1824,11 @@ function AddClientModal({ onClose, onAdd }) {
         </div>
 
         <div className="p-6 space-y-6 flex-1">
+
+          {/* Profile Photo */}
+          <section>
+            <PhotoUpload value={profilePhoto} onChange={setProfilePhoto} />
+          </section>
 
           {/* Basic Info */}
           <section>
@@ -1870,14 +1944,11 @@ function AddClientModal({ onClose, onAdd }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="block text-[9px] text-gray-400 uppercase tracking-wide mb-1">Followers</label>
-                      <input value={p.followers} onChange={e => updatePlatform(p.id, 'followers', e.target.value)} placeholder="2.4M" className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-gray-400 uppercase tracking-wide mb-1">Followers #</label>
                       <input type="number" value={p.followersNum} onChange={e => updatePlatform(p.id, 'followersNum', e.target.value)} placeholder="2400000" className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 bg-white" />
+                      {p.followersNum && <p className="text-[9px] text-gray-400 mt-0.5">= {fmtFollowers(p.followersNum)}</p>}
                     </div>
                     <div>
                       <label className="block text-[9px] text-gray-400 uppercase tracking-wide mb-1">Engagement %</label>

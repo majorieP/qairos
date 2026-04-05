@@ -4,7 +4,8 @@
       "mcp__Claude_Preview__preview_start",
       "Bash(grep -rn \"export.*Context\\\\|useContext\" /Users/marjorie/Qairos/src/context/*.jsx)",
       "Bash(PATH=/usr/local/bin:$PATH npm install @supabase/supabase-js)",
-      "Bash(PATH=/usr/local/bin:$PATH npm install @supabase/supabase-js --legacy-peer-deps)"
+      "Bash(PATH=/usr/local/bin:$PATH npm install @supabase/supabase-js --legacy-peer-deps)",
+      "Bash(grep -l \"CREATOR_PHOTO_MAP\\\\|creatorPhotoUrl\" /Users/marjorie/Qairos/src/pages/*.jsx)"
     ]
   }
 }

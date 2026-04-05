@@ -5,6 +5,7 @@ import { useInvoices } from '../context/InvoicesContext'
 import { usePayouts } from '../context/PayoutsContext'
 import BrandLogo from '../components/BrandLogo'
 import PageHeader from '../components/PageHeader'
+import { creatorPhotoUrl } from '../lib/creatorHelpers'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -395,14 +396,7 @@ const PLATFORM_ACCENTS = {
   Pinterest:   { border: '#f43f5e', bg: '#fff1f2', text: '#be123c' },
 }
 
-const CREATOR_PHOTO_MAP = { 1:'women/12', 2:'men/10', 3:'women/22', 4:'men/20', 5:'women/32', 6:'women/26', 7:'men/15', 8:'women/44', 9:'men/25', 10:'women/8' }
-function creatorPhotoUrl(id) {
-  const p = CREATOR_PHOTO_MAP[id]
-  if (p) return `https://randomuser.me/api/portraits/${p}.jpg`
-  if (!id) return null
-  const n = ((id * 7) % 49) + 1
-  return `https://randomuser.me/api/portraits/${id % 2 === 0 ? 'men' : 'women'}/${n}.jpg`
-}
+// creatorPhotoUrl imported from lib/creatorHelpers (see top of file)
 
 function KanbanCard({ c, onDragStart, onSelect }) {
   const [hovered, setHovered] = useState(false)

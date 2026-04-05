@@ -8,6 +8,7 @@ import { clientsData } from './Roster'
 import { brandsData } from './Contacts'
 import BrandLogo from '../components/BrandLogo'
 import PageHeader from '../components/PageHeader'
+import { creatorPhoto } from '../lib/creatorHelpers'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -266,12 +267,9 @@ function taskAssigneeInitials(name) {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 }
 
-const CREATOR_PHOTO_MAP = { 1:'women/12', 2:'men/10', 3:'women/22', 4:'men/20', 5:'women/32', 6:'women/26', 7:'men/15', 8:'women/44', 9:'men/25', 10:'women/8' }
+// creatorPhoto imported from lib/creatorHelpers
 function creatorPhotoUrl(creator) {
-  const p = CREATOR_PHOTO_MAP[creator.id]
-  if (p) return `https://randomuser.me/api/portraits/${p}.jpg`
-  const n = ((creator.id * 7) % 49) + 1
-  return `https://randomuser.me/api/portraits/${creator.id % 2 === 0 ? 'men' : 'women'}/${n}.jpg`
+  return creatorPhoto(creator)
 }
 
 function calcTotal(deliverables) {

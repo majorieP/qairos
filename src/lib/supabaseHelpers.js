@@ -39,6 +39,27 @@ export async function updateRow(table, id, updates) {
   return rowToObj(data)
 }
 
+// Upload a file to a storage bucket and return its public URL.
+// Returns { url, error }. If Supabase is not configured, returns a local object URL.
+export async function uploadImage(bucket, file, pathPrefix = '') {
+  if (!file) return { url: null, error: 'no file' }
+  if (!isSupabaseConfigured) {
+    // Dev fallback: use an object URL so the UI can preview without a backend.
+    return { url: URL.createObjectURL(file), error: null }
+  }
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+  const filename = `${pathPrefix}${pathPrefix ? '-' : ''}${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(filename, file, { cacheControl: '3600', upsert: false, contentType: file.type })
+  if (uploadError) {
+    console.warn(`[supabase] ${bucket} upload error:`, uploadError.message)
+    return { url: null, error: uploadError.message }
+  }
+  const { data } = supabase.storage.from(bucket).getPublicUrl(filename)
+  return { url: data.publicUrl, error: null }
+}
+
 export async function deleteRow(table, id) {
   if (!isSupabaseConfigured) return null
   const { error } = await supabase.from(table).delete().eq('id', id)

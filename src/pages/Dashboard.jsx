@@ -6,6 +6,7 @@ import { useCampaigns } from '../context/CampaignsContext'
 import { useContracts } from '../context/ContractsContext'
 import { usePayouts } from '../context/PayoutsContext'
 import BrandLogo from '../components/BrandLogo'
+import { creatorPhotoUrl } from '../lib/creatorHelpers'
 
 const _now = new Date()
 const TODAY = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`
@@ -43,15 +44,7 @@ const CAMPAIGN_STATUS_DOT = {
   'Campaign Planning': '#DDDDDD', 'Invoiced': '#BBBBBB',
 }
 
-// ─── Creator photos ───────────────────────────────────────────────────────────
-const CREATOR_PHOTO_MAP = { 1:'women/12', 2:'men/10', 3:'women/22', 4:'men/20', 5:'women/32', 6:'women/26', 7:'men/15', 8:'women/44', 9:'men/25', 10:'women/8' }
-function creatorPhotoUrl(id) {
-  const p = CREATOR_PHOTO_MAP[id]
-  if (p) return `https://randomuser.me/api/portraits/${p}.jpg`
-  if (!id) return null
-  const n = ((id * 7) % 49) + 1
-  return `https://randomuser.me/api/portraits/${id % 2 === 0 ? 'men' : 'women'}/${n}.jpg`
-}
+// creatorPhotoUrl imported at top
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtShort(iso) {

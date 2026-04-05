@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(grep -rn \"export.*Context\\\\|useContext\" /Users/marjorie/Qairos/src/context/*.jsx)",
+      "Bash(PATH=/usr/local/bin:$PATH npm install @supabase/supabase-js)",
+      "Bash(PATH=/usr/local/bin:$PATH npm install @supabase/supabase-js --legacy-peer-deps)"
+    ]
+  }
+}
